@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>Week 4</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fetch/2.0.3/fetch.min.js"></script>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <!--<script src="index.js"></script>-->
+    <link rel="stylesheet" href="styles.css" type="text/css"/>
+  </head>
+  <body>
+      <div id='vis-container'></div>
+      <div id="chart"></div>  
+      <div id="filter">
+        <b>Generation:</b>
+      </div>
+      <div id="checkbox">
+        <b>Legendary:</b>
+      </div>
+      <script type="text/javascript">
+        const colors = {
+          "Bug": "#4E79A7",
+          "Dark": "#A0CBE8",
+          "Dragon": "#f57b42",
+          "Electric": "#F28E2B",
+          "Fairy": "#b082aa",
+          "Fighting": "#59A14F",
+          "Fire": "#8CD17D",
+          "Flying": "#e6c9ff",
+          "Ghost": "#B6992D",
+          "Grass": "#499894",
+          "Ground": "#86BCB6",
+          "Ice": "#86BCB6",
+          "Normal": "#E15759",
+          "Poison": "#FF9D9A",
+          "Psychic": "#79706E",
+          "Rock": "#a8a8a8",
+          "Steel": "#BAB0AC",
+          "Water": "#D37295"}
+        // Load and munge data, then make the visualization.
+        var data = "no data";
+        //var svgContainer = ""; // keep SVG reference in global scope
+        var geneSelected = "(All)";
+        var legSelected = "(All)";
+        var dropdown = "";
+        var options = [];
+        var generations = [{value: "(All)"},
+                          {value: 1},
+                          {value: 2},
+                          {value: 3},
+                          {value: 4},
+                          {value: 5},
+                          {value: 6}];
+
+        var legs = [{value: "(All)"},
+                    {value: "True"},
+                    {value: "False"}];
+        var a = 0;
+        
+        var svgContainer = d3.select('#chart')
+          .append('svg')
+          .attr('width', 500)
+          .attr('height', 500);
+
+        var dropDown = d3.select("#filter")
+          .append("select")
+          .attr("name", "gene-list");
+
+        var dropDown2 = d3.select("#checkbox")
+          .append("select")
+          .attr("name", "leg-list");
+      
+        var list = dropDown.selectAll("option")
+            .data(generations)
+          .enter()
+            .append("option")
+
+        list.text(function (d) { return d.value; })
+            .attr("value", function (d) { return d.value; });
+
+        var list2 = dropDown2.selectAll("option")
+            .data(legs)
+          .enter()
+            .append("option")
+        
+        list2.text(function (d) { return d.value; })
+          .attr("value", function (d) { return d.value; });
+
+        d3.csv("pokemon.csv")
+          .then((data) => makeScatterPlot(data, geneSelected, legSelected));
+          
+        var makeScatterPlot = function(csvData, gene, leg) {
+          console.log("aaa");
+          if (gene == "(All)") {
+            data = csvData;
+          } else {
+            data = csvData.filter(function(d) {
+              if (d.Generation == gene) {
+                return d;
+              }
+            })
+          }
+
+          if (leg == "(All)") {
+            data = data;
+          } else {
+            data = data.filter(function(d) {
+              if (d.Legendary == leg) {
+                return d;
+              }
+            })
+          }
+           // assign data as global variable
+         
+          // get arrays of fertility rate data and life Expectancy data
+          let sp_defense_data = data.map((row) => parseFloat(row["Sp. Def"]));
+          let total_data = data.map((row) => parseFloat(row["Total"]));
+
+
+          // find data limits
+          let axesLimits = findMinMax(sp_defense_data, total_data);
+
+          // draw axes and return scaling + mapping functions
+          let mapFunctions = drawAxes(axesLimits, "Sp. Def", "Total");
+
+          // plot data as points and add tooltip functionality
+          plotData(mapFunctions);
+
+          // draw title and axes labels
+          makeLabels();
+        }
+
+          // make title and axes labels
+        var makeLabels = function() {
+          svgContainer.append('text')
+            .attr('x', 100)
+            .attr('y', 40)
+            .style('font-size', '12pt')
+            .text("Pokemon: Special Defense vs Total Stats");
+
+          svgContainer.append('text')
+            .attr('x', 130)
+            .attr('y', 490)
+            .style('font-size', '10pt')
+            .text('Sp.Def');
+
+          svgContainer.append('text')
+            .attr('transform', 'translate(15, 300)rotate(-90)')
+            .style('font-size', '10pt')
+            .text('Total');
+        }
+
+          // plot all the data points on the SVG
+          // and add tooltip functionality
+        var plotData = function(map) {
+          console.log(map);
+          console.log(data);
+          // get population data as array
+          let type = data.map((row) => +row["Type 1"]);
+          //let pop_limits = d3.extent(pop_data);
+          // make size scaling function for population
+          let typeColor = function(t) {
+            return colors[t];
+          }
+
+          // mapping functions
+          let xMap = map.x;
+          let yMap = map.y;
+
+          // make tooltip
+          let div = d3.select("body").append("div")
+          .attr("class", "tooltip")
+          .style("opacity", 0);
+
+          // append data to SVG and plot as points
+          svgContainer.selectAll('.dot')
+            .data(data)
+            .enter()
+            .append('circle')
+              .attr('cx', xMap)
+              .attr('cy', yMap)
+              .attr('r', "5")
+              .attr('fill', (d) => typeColor(d["Type 1"]))
+              //.style('stroke', "#4286f4")
+              //.style("stroke-width", "1.5")
+              // add tooltip functionality to points
+              .on("mouseover", (d) => {
+                div.transition()
+                  .duration(200)
+                  .style("opacity", .9);
+                div.html("<b>" + d.Name + "</b>" + "<br/>" + d["Type 1"] + "<br/>" + d["Type 2"])
+                  .style("left", (d3.event.pageX) + "px")
+                  .style("top", (d3.event.pageY - 28) + "px");
+              })
+              .on("mouseout", (d) => {
+                div.transition()
+                  .duration(500)
+                  .style("opacity", 0);
+              });
+        }
+
+          // draw the axes and ticks
+        var drawAxes = function(limits, x, y) {
+          // return x value from a row of data
+          let xValue = function(d) { return +d[x]; }
+
+          // function to scale x value
+          let xScale = d3.scaleLinear()
+            .domain([limits.xMin - 0.5, limits.xMax + 0.5]) // give domain buffer room
+            .range([50, 450]);
+
+          // xMap returns a scaled x value from a row of data
+          let xMap = function(d) { return xScale(xValue(d)); };
+
+          // plot x-axis at bottom of SVG
+          let xAxis = d3.axisBottom().scale(xScale);
+          svgContainer.append("g")
+            .attr('transform', 'translate(0, 450)')
+            .call(xAxis);
+
+          // return y value from a row of data
+          let yValue = function(d) { return +d[y]}
+
+          // function to scale y
+          let yScale = d3.scaleLinear()
+            .domain([limits.yMax + 5, limits.yMin - 5]) // give domain buffer
+            .range([50, 450]);
+
+          // yMap returns a scaled y value from a row of data
+          let yMap = function (d) { return yScale(yValue(d)); };
+
+          // plot y-axis at the left of SVG
+          let yAxis = d3.axisLeft().scale(yScale);
+          svgContainer.append('g')
+            .attr('transform', 'translate(50, 0)')
+            .call(yAxis);
+
+          // return mapping and scaling functions
+          return {
+            x: xMap,
+            y: yMap,
+            xScale: xScale,
+            yScale: yScale
+          };
+        }
+
+        // find min and max for arrays of x and y
+        var findMinMax = function(x, y) {
+
+          // get min/max x values
+          let xMin = d3.min(x);
+          let xMax = d3.max(x);
+
+          // get min/max y values
+          let yMin = d3.min(y);
+          let yMax = d3.max(y);
+
+          // return formatted min/max data as an object
+          return {
+            xMin : xMin,
+            xMax : xMax,
+            yMin : yMin,
+            yMax : yMax
+          }
+        }
+
+        // format numbers
+        var numberWithCommas = function(x) {
+          return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        dropDown.on("change", function() {
+          clearChart();
+          geneSelected = this.value;
+          d3.csv("pokemon.csv")
+          .then((data) => makeScatterPlot(data, geneSelected, legSelected));
+        })
+
+        dropDown2.on("change", function() {
+          clearChart();
+          console.log("change", this.value);
+          legSelected = this.value;
+          console.log("leg", legSelected);
+          d3.csv("pokemon.csv")
+          .then((data) => makeScatterPlot(data, geneSelected, legSelected));
+        })
+
+        var clearChart = function() {
+          var curr = d3.select("#chart");
+          curr.selectAll("svg > *").remove();
+        }
+
+      </script>
+  </body>
+
+  
+</html>
